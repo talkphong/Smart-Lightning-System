@@ -1,0 +1,214 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0px auto;
+            max-width: 800px;
+            padding: 20px;
+            font-size: 18px;
+        }
+
+        #first-light-status {
+    font-weight: bold;
+    font-size: 20px;
+    color: #0077cc; /* Màu xanh nước biển */
+}
+
+#second-light-status {
+    font-weight: bold;
+    font-size: 20px;
+    color: #228b22; /* Màu xanh lá cây */
+}
+
+        #status {
+            font-weight: bold;
+            font-size: 24px;
+        }
+
+        #slider {
+            margin-top: 20px;
+        }
+
+        button {
+            font-size: 16px;
+        }
+
+        label {
+            font-size: 16px;
+        }
+    </style>
+    <title>ESP8266 WebSocket</title>
+</head>
+
+<body>
+    <div> Webscoket status
+        <span id="status"> disconnected </span>
+    </div>
+    <div>
+        <p id="motion-status">Không phát hiện chuyển động</p>
+        <p id="lux">Mức độ ánh sáng: 0</p>
+        <p id="first-light-status">Đèn 1 đang: <span id="den1State"></span></p>
+        <p id="second-light-status">Đèn 2 đang: <span id="den2State"></span></p>
+        <p>Thời gian bật: <span id="rtcStartDisplay"></span></p>
+        <p>Thời gian tắt: <span id="rtcEndDisplay"></span></p>
+        <p>Chế độ: <span id="mode"></span></p>
+
+        <div id="slider">
+            <button id="manual-toggle" onclick="btn1Click()">Bật/Tắt đèn 1</button><br>
+            <button id="manual-toggle-second-light" onclick="btn2Click()">Bật/Tắt đèn 2</button><br>
+            <label for="startTime">Thời gian bật:</label>
+            <input type="range" id="startTime" name="startTime" min="0" max="24" value="0" class="slider"
+                oninput="updateStartTime(this.value)">
+            <span id="startTimeValue">0</span>
+            <br>
+            <label for="endTime">Thời gian tắt:</label>
+            <input type="range" id="endTime" name="endTime" min="0" max="24" value="0" class="slider"
+                oninput="updateEndTime(this.value)">
+            <span id="endTimeValue">0</span>
+        </div>
+    </div>
+
+    <script>
+        var url = window.location.host;
+        var ws = new WebSocket('ws://' + url + '/ws');
+        var den1State = 0;
+        var den2State = 0;
+        var rtcStart = 0;
+        var rtcEnd = 0;
+        var lux = 0;
+        var chuyenDong = 0;
+        var tuDong = 1;
+
+        ws.onopen = function () {
+            document.getElementById('status').innerHTML = 'Connected';
+            led.disabled = false;
+            console.log('connected...')
+        };
+
+        //send
+        function sendData() {
+            if (tuDong == 0) {
+                var jsonSend = {
+                    "den1State": den1State,
+                    "den2State": den2State,
+                    "rtcStart": rtcStart,
+                    "rtcEnd": rtcEnd,
+                    "lux": lux,
+                    "chuyenDong": chuyenDong,
+                    "tuDong": tuDong,
+                };
+
+                var txtSend = JSON.stringify(jsonSend);
+                ws.send(txtSend);
+            }
+        }
+
+        //receive
+        ws.onmessage = function (evt) {
+            let file = new Blob([evt.data], { type: 'application/json' });
+
+            file.text()
+                .then(value => {
+                    var jsonReceive = JSON.parse(value);
+                    den1State = jsonReceive["den1State"];
+                    den2State = jsonReceive["den2State"];
+                    rtcStart = jsonReceive["rtcStart"];
+                    rtcEnd = jsonReceive["rtcEnd"];
+                    lux = jsonReceive["lux"];
+                    chuyenDong = jsonReceive["chuyenDong"];
+                    tuDong = jsonReceive["tuDong"];
+                })
+                .catch(error => {
+                    console.log("Something went wrong" + error);
+                });
+        };
+
+        setInterval(updateUI);
+
+        function updateUI() {
+            updateChuyenDong();
+            updateLux();
+            updatedDen1state();
+            updatedDen2state();
+            updatedRtcStart();
+            updatedRtcEnd();
+            updatedTuDong();
+        }
+
+        function updateChuyenDong() {
+            const Pir = document.getElementById("motion-status");
+            Pir.textContent = chuyenDong ? "Phát hiện chuyển động!" : "Không phát hiện chuyển động";
+        }
+
+        function updateLux() {
+            const lightStatusElement = document.getElementById("lux");
+            lightStatusElement.textContent = `Mức độ ánh sáng:` + lux;
+        }
+
+        function updatedDen1state() {
+            const led1StatusElement = document.getElementById("den1State");
+            led1StatusElement.textContent = den1State ? "Bật" : "Tắt";
+        }
+
+        function updatedDen2state() {
+            const led2StatusElement = document.getElementById("den2State");
+            led2StatusElement.textContent = den2State ? "Bật" : "Tắt";
+        }
+
+        function updatedRtcStart() {
+            const rtcst = document.getElementById("rtcStartDisplay");
+            rtcst.textContent = rtcStart;
+        }
+
+        function updatedRtcEnd() {
+            const rtce = document.getElementById("rtcEndDisplay");
+            rtce.textContent = rtcEnd;
+        }
+
+        function updatedTuDong() {
+            const md = document.getElementById("mode");
+            md.textContent = tuDong ? "Tự động" : "Thủ công";
+
+            const sliderdisplay = document.getElementById("slider");
+            sliderdisplay.style.display = tuDong ? "none" : "inline-block";
+        }
+
+        function updateStartTime(value) {
+            document.getElementById('startTimeValue').innerText = value;
+            rtcStart = value;
+            sendData();
+        }
+
+        function updateEndTime(value) {
+            document.getElementById('endTimeValue').innerText = value;
+            rtcEnd = value;
+            sendData();
+        }
+
+        function btn1Click() {
+            den1State = !den1State;
+            sendData();
+        }
+
+        function btn2Click() {
+            den2State = !den2State;
+            sendData();
+        }
+
+        function openDatabase(){
+           
+        }
+    </script>
+     
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+</body>
+
+</html>
